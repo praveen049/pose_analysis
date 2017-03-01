@@ -19,8 +19,10 @@ def create_images(video_file, image_dir, image_count):
     """
     extensions = ['jpg','jpeg','JPG','JPEG']
     file_list = []
+
+    image_list = split_video(FLAGS.video_file, FLAGS.image_dir,
+                              FLAGS.images)
    
-   # python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     for extension in extensions:
         file_glob = os.path.join(image_dir, '*.' + extension)
         file_list.extend(gfile.Glob(file_glob))
@@ -28,11 +30,15 @@ def create_images(video_file, image_dir, image_count):
         print('No image files created from the video')
         return None
     if len(file_list) != image_count:
-        print ('Wrong number of files created. Configured: ' + image_count)
+        print ('Wrong number of files created. Configured: %d', image_count)
         return None
     return file_list
 
 def label_images(image_list):
+    """
+    Goes through the provied list of images and calculate the probabilities using the default tensorgraph.
+    Sorts the resulting values and select the top-3
+    """
     for image in image_list:
         image_data = tf.gfile.FastGFile(image, 'rb').read()
         # Loads label file, strips off carriage return
@@ -55,7 +61,16 @@ def label_images(image_list):
                 print('%s (score = %.5f)' % (human_string, score))
 
 def split_video(video_file, image_dir, image_count):
+    """
+    Split the video using CV library
+
+    Does not return anything but stores the split images into the image_dir
+    """
+    #python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     video = cv2.VideoCapture(video_file)
+    pose_timestamp = [0, 5, 5, 10]
+    fps = 25
+    poseCount = 0
     for i in range(0,len(pose_timestamp)):
         if i>0 and i%2 == 1:
             poseCount+=1
@@ -63,7 +78,7 @@ def split_video(video_file, image_dir, image_count):
             print(duration)
             frameNum = fps * duration
             print(frameNum)
-            frameIgnore = frameNum / picNum - 1;
+            frameIgnore = frameNum / image_count - 1;
             print(frameIgnore)
 
             readCount = 0
@@ -72,14 +87,14 @@ def split_video(video_file, image_dir, image_count):
                 ignoreCount = 0
                 readCount+=1
                 while ignoreCount < frameIgnore and readCount < frameNum:
-                    rval, frame = vc.read()
+                    rval, frame = video.read()
                     ignoreCount+=1
                     readCount+=1
                 print(ignoreCount)
                 print(readCount)
-                rval, frame = vc.read()
-                if writeCount < picNum:
-                    cv2.imwrite(outputPath + '/pose'+str(poseCount)+'-'+str(writeCount) + '.jpg',frame)
+                rval, frame = video.read()
+                if writeCount < image_count:
+                    cv2.imwrite(image_dir + '/pose'+str(poseCount)+'-'+str(writeCount) + '.jpg',frame)
                     writeCount+=1
     
 def main(_):
