@@ -10,6 +10,8 @@ import os.path
 import argparse
 import numpy as np
 from tensorflow.python.platform import gfile
+from collections import OrderedDict
+from glob import glob
 
 def create_images(video_file, image_dir, image_count):
     """Create a list of images from the video file
@@ -20,6 +22,12 @@ def create_images(video_file, image_dir, image_count):
     extensions = ['jpg','jpeg','JPG','JPEG']
     file_list = []
 
+    # Remove any old files in this folder with the default extension
+    for extension in extensions:
+        old_files = os.path.join(image_dir, '*.' + extension)
+        for old_file in glob(old_files):
+            os.remove(old_file)
+    
     image_list = split_video(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
    
@@ -42,11 +50,15 @@ def label_images(image_list):
     Returns:
         A dictonary of the label and the top probilities
     """
+    prod_list = {}
     for image in image_list:
+       
+        print image
         image_data = tf.gfile.FastGFile(image, 'rb').read()
         # Loads label file, strips off carriage return
         label_lines = [line.rstrip() for line 
                        in tf.gfile.GFile("../image_classification/tf_files/flower_photos/retrained_labels.txt")]
+  
         # Unpersists graph from file
         with tf.gfile.FastGFile("../image_classification/tf_files/flower_photos/retrained_graph.pb", 'rb') as f:
             graph_def = tf.GraphDef()
@@ -56,15 +68,19 @@ def label_images(image_list):
             # Feed the image_data as input to the graph and get first prediction
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
             predictions = sess.run(softmax_tensor, {'DecodeJpeg/contents:0': image_data})
-            top_3 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:3]
+        
+            top_1 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:1]
 
-            top_dict = {}
-            for node_id in top_3:
+        #    top_dict = OrderedDict()
+            for node_id in top_1:
                 human_string = label_lines[node_id]
                 score = predictions[0][node_id]
-                top_dict[human_string] = score
-                print('%s (score = %.5f)' % (human_string, score))
-            return top_dict
+                prod_list[human_string] = prod_list.get(human_string, score) + score
+                print prod_list
+         #       top_dict[human_string] = score
+               # print('%s (score = %.5f)' % (human_string, score))
+           # pred_list.append(t)
+    return prod_list
 
 def split_video(video_file, image_dir, image_count):
     """
@@ -81,10 +97,10 @@ def split_video(video_file, image_dir, image_count):
         if i>0 and i%2 == 1:
             poseCount+=1
             duration = int(pose_timestamp[i])-int(pose_timestamp[i-1]) + 1
-            print(duration)
+           
             frameNum = fps * duration          
             frameIgnore = frameNum / image_count - 1;
-            print('the frame ignore is count %d' %(frameIgnore))
+           # print('the frame ignore is count %d' %(frameIgnore))
 
             readCount = 0
             writeCount = 0
@@ -95,7 +111,7 @@ def split_video(video_file, image_dir, image_count):
                     rval, frame = video.read()
                     ignoreCount+=1
                     readCount+=1              
-                print('the readcount %d ignore count %d' %(readCount,ignoreCount))
+            #    print('the readcount %d ignore count %d' %(readCount,ignoreCount))
                 rval, frame = video.read()
                 if writeCount < image_count:
                     cv2.imwrite(image_dir + '/pose'+str(poseCount)+'-'+str(writeCount) + '.jpg',frame)
@@ -128,8 +144,8 @@ def main(_):
   image_list = create_images(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
   
-  label_list = label_images(image_list)
-  print label_list
+  label_dict = label_images(image_list)
+  #print label_dict
  
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
