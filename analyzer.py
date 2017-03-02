@@ -38,6 +38,9 @@ def label_images(image_list):
     """
     Goes through the provied list of images and calculate the probabilities using the default tensorgraph.
     Sorts the resulting values and select the top-3
+
+    Returns:
+        A dictonary of the label and the top probilities
     """
     for image in image_list:
         image_data = tf.gfile.FastGFile(image, 'rb').read()
@@ -54,11 +57,14 @@ def label_images(image_list):
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
             predictions = sess.run(softmax_tensor, {'DecodeJpeg/contents:0': image_data})
             top_3 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:3]
-   
+
+            top_dict = {}
             for node_id in top_3:
                 human_string = label_lines[node_id]
                 score = predictions[0][node_id]
+                top_dict[human_string] = score
                 print('%s (score = %.5f)' % (human_string, score))
+            return top_dict
 
 def split_video(video_file, image_dir, image_count):
     """
@@ -68,7 +74,7 @@ def split_video(video_file, image_dir, image_count):
     """
     #python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     video = cv2.VideoCapture(video_file)
-    pose_timestamp = [0, 5, 5, 10]
+    pose_timestamp = [0, 5]
     fps = 25
     poseCount = 0
     for i in range(0,len(pose_timestamp)):
@@ -76,10 +82,9 @@ def split_video(video_file, image_dir, image_count):
             poseCount+=1
             duration = int(pose_timestamp[i])-int(pose_timestamp[i-1]) + 1
             print(duration)
-            frameNum = fps * duration
-            print(frameNum)
+            frameNum = fps * duration          
             frameIgnore = frameNum / image_count - 1;
-            print(frameIgnore)
+            print('the frame ignore is count %d' %(frameIgnore))
 
             readCount = 0
             writeCount = 0
@@ -89,13 +94,21 @@ def split_video(video_file, image_dir, image_count):
                 while ignoreCount < frameIgnore and readCount < frameNum:
                     rval, frame = video.read()
                     ignoreCount+=1
-                    readCount+=1
-                print(ignoreCount)
-                print(readCount)
+                    readCount+=1              
+                print('the readcount %d ignore count %d' %(readCount,ignoreCount))
                 rval, frame = video.read()
                 if writeCount < image_count:
                     cv2.imwrite(image_dir + '/pose'+str(poseCount)+'-'+str(writeCount) + '.jpg',frame)
                     writeCount+=1
+
+def analyze_video(video_file):
+    """
+    Analyze the video and get information that will be used later on
+
+    Returns
+        A dictonary of the duration of the video, the frames per second,
+    """
+
     
 def main(_):
   if not tf.gfile.Exists(FLAGS.video_file):
@@ -110,10 +123,13 @@ def main(_):
   if not tf.gfile.Exists("../image_classification/tf_files/flower_photos/retrained_graph.pb"):
       print ("The retrained graph not correct relative path")
       return None
+
+  video_info = analyze_video(FLAGS.video_file)
   image_list = create_images(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
- 
+  
   label_list = label_images(image_list)
+  print label_list
  
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
