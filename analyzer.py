@@ -42,7 +42,7 @@ def create_images(video_file, image_dir, image_count):
         return None
     return file_list
 
-def label_images(image_list):
+def label_images(image_list, algo):
     """
     Goes through the provied list of images and calculate the probabilities using the default tensorgraph.
     Sorts the resulting values and select the top-3
@@ -51,19 +51,17 @@ def label_images(image_list):
         A dictonary of the label and the top probilities
     """
     prod_list = {}
-    for image in image_list:
-       
-        print image
+    # Unpersists graph from file
+    with tf.gfile.FastGFile("../retrain/tf_files/flower_photos/retrained_graph.pb", 'rb') as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+        _ = tf.import_graph_def(graph_def, name='')
+    for image in image_list:           
         image_data = tf.gfile.FastGFile(image, 'rb').read()
         # Loads label file, strips off carriage return
         label_lines = [line.rstrip() for line 
-                       in tf.gfile.GFile("../image_classification/tf_files/flower_photos/retrained_labels.txt")]
+                       in tf.gfile.GFile("../retrain/tf_files/flower_photos/retrained_labels.txt")]
   
-        # Unpersists graph from file
-        with tf.gfile.FastGFile("../image_classification/tf_files/flower_photos/retrained_graph.pb", 'rb') as f:
-            graph_def = tf.GraphDef()
-            graph_def.ParseFromString(f.read())
-            _ = tf.import_graph_def(graph_def, name='')
         with tf.Session() as sess:
             # Feed the image_data as input to the graph and get first prediction
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
@@ -71,15 +69,19 @@ def label_images(image_list):
         
             top_1 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:1]
 
-        #    top_dict = OrderedDict()
             for node_id in top_1:
                 human_string = label_lines[node_id]
                 score = predictions[0][node_id]
-                prod_list[human_string] = prod_list.get(human_string, score) + score
+                if algo == 'average': 
+                    prod_list[human_string] = prod_list.get(human_string, score) + score
+                elif algo == 'best':
+                    if human_string in prod_list:                        
+                        if score > prod_list.get(human_string, score):
+                            prod_list[human_string] = score
+                    else:
+                        prod_list[human_string] = score
                 print prod_list
-         #       top_dict[human_string] = score
                # print('%s (score = %.5f)' % (human_string, score))
-           # pred_list.append(t)
     return prod_list
 
 def split_video(video_file, image_dir, image_count):
@@ -144,7 +146,7 @@ def main(_):
   image_list = create_images(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
   
-  label_dict = label_images(image_list)
+  label_dict = label_images(image_list,FLAGS.algo)
   #print label_dict
  
 if __name__ == '__main__':
@@ -166,6 +168,12 @@ if __name__ == '__main__':
       type=int,
       default='1',
       help='The number of section to split the video into.'
+  )
+  parser.add_argument(
+      '--algo',
+      type=str,
+      default='best',
+      help='Algorithm to be used. Get the average probabilities or the best case probability.'
   )
   parser.add_argument(
       '--images',
