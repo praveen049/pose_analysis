@@ -77,8 +77,10 @@ def label_images(image_list, algo):
                 elif algo == 'best':
                     if human_string in prod_list:                        
                         if score > prod_list.get(human_string, score):
+                            print ('increased proability for: %s' %(image))
                             prod_list[human_string] = score
-                    else:
+                    else:                      
+                        print ('increased proability for: %s' %(image))
                         prod_list[human_string] = score
                 print prod_list
                # print('%s (score = %.5f)' % (human_string, score))
@@ -92,7 +94,7 @@ def split_video(video_file, image_dir, image_count):
     """
     #python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     video = cv2.VideoCapture(video_file)
-    pose_timestamp = [0, 5]
+    pose_timestamp = [0, 40]
     fps = 25
     poseCount = 0
     for i in range(0,len(pose_timestamp)):
