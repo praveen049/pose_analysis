@@ -77,15 +77,26 @@ def label_images(image_list, algo):
                 elif algo == 'best':
                     if human_string in prod_list:                        
                         if score > prod_list.get(human_string, score):
-                            print ('increased proability for: %s' %(image))
                             prod_list[human_string] = score
                     else:                      
-                        print ('increased proability for: %s' %(image))
                         prod_list[human_string] = score
-                print prod_list
+               # print prod_list
                # print('%s (score = %.5f)' % (human_string, score))
     return prod_list
 
+def create_summary (scores_dict):
+    #print scores_dict.keys()
+    MULTI = 4 # Get the overall score from individual pose scores
+    overall_score = 0
+    pose_list=['pose1','pose2','pose3','pose4','pose5']
+    for pose in pose_list:    
+        #print([k for k in scores_dict if k.endswith(pose)])
+        gen = (k for k in scores_dict if k.endswith(pose))
+        for score in gen:
+            overall_score += MULTI * scores_dict[score]
+            print ("%s:%.2f" %(pose,scores_dict[score]))
+    print ("overallscore:%.2f" %(overall_score))
+           
 def split_video(video_file, image_dir, image_count):
     """
     Split the video using CV library
@@ -94,7 +105,7 @@ def split_video(video_file, image_dir, image_count):
     """
     #python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     video = cv2.VideoCapture(video_file)
-    pose_timestamp = [0, 40]
+    pose_timestamp = [0, 5]
     fps = 25
     poseCount = 0
     for i in range(0,len(pose_timestamp)):
@@ -149,7 +160,8 @@ def main(_):
                               FLAGS.images)
   
   label_dict = label_images(image_list,FLAGS.algo)
-  #print label_dict
+  summary_info = create_summary(label_dict)
+  #print summary_info
  
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
