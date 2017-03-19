@@ -3,6 +3,7 @@
 #
 # =============================================================
 import tensorflow as tf
+import commands
 import sys
 import cv2
 import pdb
@@ -139,8 +140,30 @@ def analyze_video(video_file):
     Returns
         A dictonary of the duration of the video, the frames per second,
     """
-
+    status, output = commands.getstatusoutput("ffmpeg -i "+video_file+" -vcodec copy -f rawvideo -y /dev/null 2>&1 | tr ^M '\n' | grep -i 'fps'")
+    print(status)
+    print(output)
+	
+    if status != 0:
+        return 0
+    lines = output.split('\n')
+    entrys = lines[0].split(', ')
+    fps = 0;
+    frame = 0;
     
+    for entry in entrys:
+        print(entry)
+        posFPS = entry.find('fps')
+        print(posFPS)
+        if(posFPS > 0):
+            fpsStr = entry.split(' ')[0]
+            print(fpsStr)
+            fps = float(fpsStr)
+            break
+    entrys = lines[2].split(' ')
+    frame = float(entrys[1])
+    return fps, frame   
+
 def main(_):
   if not tf.gfile.Exists(FLAGS.video_file):
      print ("Video file '" + FLAGS.video_file + "'does not exist")
@@ -156,6 +179,7 @@ def main(_):
       return None
 
   video_info = analyze_video(FLAGS.video_file)
+  print video_info
   image_list = create_images(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
   
