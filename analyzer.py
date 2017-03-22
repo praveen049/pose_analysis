@@ -6,6 +6,7 @@ import tensorflow as tf
 import commands
 import sys
 import cv2
+import re
 import pdb
 import os.path
 import argparse
@@ -13,6 +14,14 @@ import numpy as np
 from tensorflow.python.platform import gfile
 from collections import OrderedDict
 from glob import glob
+
+#Scoring levels
+LEVEL5 = 60
+LEVEL4 = 50
+LEVEL3 = 40
+LEVEL2 = 30
+LEVEL1 = 20
+VIDEO_FPS = 25
 
 def create_images(video_file, image_dir, image_count):
     """Create a list of images from the video file
@@ -67,7 +76,6 @@ def label_images(image_list, algo):
             # Feed the image_data as input to the graph and get first prediction
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
             predictions = sess.run(softmax_tensor, {'DecodeJpeg/contents:0': image_data})
-        
             top_1 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:1]
 
             for node_id in top_1:
@@ -78,24 +86,35 @@ def label_images(image_list, algo):
                 elif algo == 'best':
                     if human_string in prod_list:                        
                         if score > prod_list.get(human_string, score):
+                            
                             prod_list[human_string] = score
                     else:                      
                         prod_list[human_string] = score
-               # print prod_list
                # print('%s (score = %.5f)' % (human_string, score))
     return prod_list
 
 def create_summary (scores_dict):
-    #print scores_dict.keys()
     MULTI = 4 # Get the overall score from individual pose scores
     overall_score = 0
     pose_list=['pose1','pose2','pose3','pose4','pose5']
     for pose in pose_list:    
-        #print([k for k in scores_dict if k.endswith(pose)])
         gen = (k for k in scores_dict if k.endswith(pose))
         for score in gen:
-            overall_score += MULTI * scores_dict[score]
-            print ("%s:%.2f" %(pose,scores_dict[score]))
+            each_score = scores_dict[score] * 100
+            if each_score >= LEVEL5:
+                pose_score = 5
+            elif each_score < LEVEL5 and  each_score >= LEVEL4:
+                pose_score = 4
+            elif each_score < LEVEL4 and  each_score >= LEVEL3:
+                pose_score = 3
+            elif each_score < LEVEL3 and  each_score >= LEVEL2:
+                pose_score = 2
+            elif each_score < LEVEL2 and  each_score >= LEVEL1:
+                pose_score = 1
+            elif each_score < LEVEL1:
+                pose_score = 0
+            overall_score += MULTI * pose_score
+            print ("%s:%.2f" %(pose, pose_score))
     print ("overallscore:%.2f" %(overall_score))
            
 def split_video(video_file, image_dir, image_count):
@@ -107,17 +126,14 @@ def split_video(video_file, image_dir, image_count):
     #python  CrossFit.mp4 /root/image 15 23 0 5 5 10
     video = cv2.VideoCapture(video_file)
     pose_timestamp = [0, 5]
-    fps = 25
+    fps = VIDEO_FPS
     poseCount = 0
     for i in range(0,len(pose_timestamp)):
         if i>0 and i%2 == 1:
             poseCount+=1
             duration = int(pose_timestamp[i])-int(pose_timestamp[i-1]) + 1
-           
             frameNum = fps * duration          
             frameIgnore = frameNum / image_count - 1;
-           # print('the frame ignore is count %d' %(frameIgnore))
-
             readCount = 0
             writeCount = 0
             while readCount < frameNum:
@@ -127,7 +143,6 @@ def split_video(video_file, image_dir, image_count):
                     rval, frame = video.read()
                     ignoreCount+=1
                     readCount+=1              
-            #    print('the readcount %d ignore count %d' %(readCount,ignoreCount))
                 rval, frame = video.read()
                 if writeCount < image_count:
                     cv2.imwrite(image_dir + '/pose'+str(poseCount)+'-'+str(writeCount) + '.jpg',frame)
@@ -140,9 +155,10 @@ def analyze_video(video_file):
     Returns
         A dictonary of the duration of the video, the frames per second,
     """
+    video_specs = {}
     status, output = commands.getstatusoutput("ffmpeg -i "+video_file+" -vcodec copy -f rawvideo -y /dev/null 2>&1 | tr ^M '\n' | grep -i 'fps'")
-    print(status)
-    print(output)
+    #print("the status is %s" %(status))
+    #print("the output is %s" %(output))
 	
     if status != 0:
         return 0
@@ -152,17 +168,20 @@ def analyze_video(video_file):
     frame = 0;
     
     for entry in entrys:
-        print(entry)
         posFPS = entry.find('fps')
-        print(posFPS)
+        #print(posFPS)
         if(posFPS > 0):
             fpsStr = entry.split(' ')[0]
-            print(fpsStr)
             fps = float(fpsStr)
+            VIDEO_FPS = fps
+            video_specs['fps'] = float(fpsStr)
+            #print("fps is %d" %(float(fpsStr)))
             break
-    entrys = lines[2].split(' ')
-    frame = float(entrys[1])
-    return fps, frame   
+    entrys = re.split("\s+",lines[2]);
+    frame = int(entrys[1])
+    video_specs['frame']=int(entrys[1])
+
+    return video_specs
 
 def main(_):
   if not tf.gfile.Exists(FLAGS.video_file):
@@ -179,13 +198,12 @@ def main(_):
       return None
 
   video_info = analyze_video(FLAGS.video_file)
-  print video_info
+
   image_list = create_images(FLAGS.video_file, FLAGS.image_dir,
                               FLAGS.images)
   
   label_dict = label_images(image_list,FLAGS.algo)
   summary_info = create_summary(label_dict)
-  #print summary_info
  
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
