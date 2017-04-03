@@ -61,26 +61,32 @@ def label_images(image_list, algo):
         A dictonary of the label and the top probilities
     """
     prod_list = {}
-    # Unpersists graph from file
+   # Unpersists graph from file
     with tf.gfile.FastGFile("../retrain/tf_files/flower_photos/retrained_graph.pb", 'rb') as f:
         graph_def = tf.GraphDef()
         graph_def.ParseFromString(f.read())
         _ = tf.import_graph_def(graph_def, name='')
-    for image in image_list:           
+    for image in image_list:
+        '''loop through the list of testing images from video'''
         image_data = tf.gfile.FastGFile(image, 'rb').read()
         # Loads label file, strips off carriage return
         label_lines = [line.rstrip() for line 
                        in tf.gfile.GFile("../retrain/tf_files/flower_photos/retrained_labels.txt")]
-  
         with tf.Session() as sess:
             # Feed the image_data as input to the graph and get first prediction
+            merged = tf.summary.merge_all()
+            predict_writer = tf.summary.FileWriter(
+                                       FLAGS.summaries_dir + '/predict', sess.graph)
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
+            #print merged.type
             predictions = sess.run(softmax_tensor, {'DecodeJpeg/contents:0': image_data})
-            top_1 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:1]
+            #predict_writer.add_summary(summary)
+            top_1 = predictions[0].argsort()[-len(predictions[0]):][::-1][0:3]
 
             for node_id in top_1:
                 human_string = label_lines[node_id]
                 score = predictions[0][node_id]
+                print ('%s:%s:%s' %(image,human_string, score))
                 if algo == 'average': 
                     prod_list[human_string] = prod_list.get(human_string, score) + score
                 elif algo == 'best':
@@ -224,6 +230,12 @@ if __name__ == '__main__':
       type=int,
       default='1',
       help='The number of section to split the video into.'
+  )
+  parser.add_argument(
+      '--summaries_dir',
+      type=str,
+      default='/tmp/retrain_logs',
+      help='Where to save summary logs for TensorBoard.'
   )
   parser.add_argument(
       '--algo',
