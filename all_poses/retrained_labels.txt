@@ -1,0 +1,10 @@
+roses
+people
+tulips
+deadlift
+fsquat pose5
+fsquat pose4
+fsquat pose1
+fsquat pose3
+fsquat pose2
+sunflowers
